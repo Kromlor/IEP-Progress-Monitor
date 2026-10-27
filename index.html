@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IEP Progress Monitor v1.1</title>
+<style>
+  [hidden]{display:none!important}
+  :root{--ink:#111;--line:#000;--muted:#555;--accent:#4b2a7b;--accent2:#c9a227;--bg:#fff;--panel:#f4f1f8}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Atkinson Hyperlegible","Segoe UI",Arial,sans-serif;color:var(--ink);background:#e9e6ee}
+  button,select,input{font:inherit}
+  :focus-visible{outline:3px solid #1a73e8;outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  /* App bar */
+  .bar{position:sticky;top:0;z-index:10;background:var(--accent);color:#fff;padding:8px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .bar h1{font-size:1.05rem;margin:0 12px 0 0;white-space:nowrap}
+  .bar button,.bar select{background:#fff;color:var(--accent);border:0;border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:600}
+  .bar button.gold{background:var(--accent2);color:#1b1030}
+  .bar .status{font-size:.85rem;opacity:.9;margin-left:auto}
+  .bar select{max-width:260px}
+  .bar select.need{outline:3px solid var(--accent2)}
+
+  .goalbar{background:var(--panel);border-bottom:1px solid #cfc6dd;padding:8px 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .goalbar button{border:1px solid #9b8bb5;background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer}
+  .goalbar button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .goalbar .spacer{flex:1}
+  .goalbar .danger{color:#a40000;border-color:#d9a0a0}
+
+  /* The form (emulates the TIENET progress page) */
+  .sheet{background:var(--bg);max-width:1500px;margin:16px auto;padding:20px 24px 28px;box-shadow:0 1px 6px rgba(0,0,0,.15);font-family:Calibri,"Segoe UI",Arial,sans-serif}
+  .unit{text-align:center;font-weight:700;line-height:1.35;white-space:pre-line;margin-bottom:10px}
+  .idrow{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:14px;align-items:center;margin-bottom:4px}
+  .idrow label{display:flex;gap:6px;align-items:center;font-size:1.05rem}
+  .idrow label > span{font-weight:700;white-space:nowrap}
+  .idrow input{flex:1;min-width:0;border:1px solid #999;padding:3px 6px}
+  .idrow input.goalnum{flex:0 0 3.2em;text-align:center}
+  table.form{width:100%;border-collapse:collapse;border:1px solid var(--line)}
+  table.form td{border:1px solid var(--line);vertical-align:top;padding:4px 6px}
+  .goalcell b{display:block}
+  .goaltext{width:100%;min-height:4.5em;border:1px dashed #bbb;padding:4px;resize:vertical;font:inherit;font-size:1.05rem}
+  td.left{width:26%;vertical-align:middle!important}
+  td.left label{display:flex;align-items:center;gap:6px;font-weight:700;flex-wrap:wrap}
+  td.left input{border:1px solid #999;padding:5px 6px}
+  .codes{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:3px}
+  .codes > span,.md-label{font-weight:700}
+  .codes select{border:1px solid #777;padding:2px 4px;max-width:31%}
+  .tools{display:inline-flex;gap:2px;background:#e8eef6;border:1px solid #b8c4d6;padding:2px;margin:3px 0}
+  .tools button{border:1px solid transparent;background:transparent;padding:2px 8px;cursor:pointer;min-width:30px;font-weight:700}
+  .tools button:hover{border-color:#7a8db0;background:#fff}
+  .editor{border:1px solid #888;min-height:90px;padding:6px 8px;font-size:1.05rem;resize:vertical;overflow:auto;background:#fff}
+  .editor:empty:before{content:attr(data-ph);color:#999}
+  .attach{display:flex;gap:16px;align-items:center;margin-top:5px;flex-wrap:wrap;font-size:.95rem}
+  .attach a{color:#1a5fb4;cursor:pointer;text-decoration:none}
+  .attach a:hover{text-decoration:underline}
+  .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .thumb{position:relative;border:1px solid #ccc;padding:2px;background:#fafafa}
+  .thumb img{display:block;max-height:120px;max-width:240px}
+  .thumb button{position:absolute;top:2px;right:2px;border:0;background:#a40000;color:#fff;border-radius:3px;cursor:pointer;padding:0 6px}
+  .rowtools{text-align:right;margin-top:4px}
+  .rowtools button{border:0;background:none;color:#a40000;cursor:pointer;font-size:.85rem}
+  .addrow{margin-top:10px;border:1px dashed var(--accent);background:#fff;color:var(--accent);padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600}
+  footer{text-align:center;color:#555;font-size:.8rem;margin:0 0 24px}
+
+  /* Dialogs */
+  dialog{border:0;border-radius:10px;padding:18px 20px;max-width:720px;width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+  dialog h2{margin-top:0;color:var(--accent)}
+  dialog textarea{width:100%;min-height:110px;font:inherit;font-size:.9rem}
+  dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+  dialog button{padding:7px 14px;border-radius:6px;border:1px solid #888;background:#fff;cursor:pointer}
+  dialog button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .help{font-size:.88rem;color:#444}
+
+  #printArea{display:none}
+  @media print{
+    @page{size:letter landscape;margin:.45in}
+    body{background:#fff}
+    .bar,.goalbar,#app,footer,dialog{display:none!important}
+    #printArea{display:block}
+    .psheet{page-break-after:always;font-family:Calibri,Arial,sans-serif;font-size:11pt}
+    .psheet:last-child{page-break-after:auto}
+    .psheet .unit{margin-bottom:6px}
+    .pid{display:flex;justify-content:space-between;margin:4px 0}
+    .psheet table{width:100%;border-collapse:collapse}
+    .psheet td{border:1px solid #000;padding:4px 6px;vertical-align:top}
+    .psheet td.l{width:24%;vertical-align:middle;font-weight:700}
+    .psheet .md{min-height:.9in}
+    .psheet img{max-width:3.2in;max-height:2.2in;margin:4px 6px 0 0}
+    tr{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<div class="bar" role="toolbar" aria-label="File actions">
+  <h1>IEP Progress Monitor</h1>
+  <button id="btnFolder" class="gold" title="Pick your synced caseload folder (the one that holds a folder per student)">📁 Choose caseload folder</button>
+  <select id="studentPick" aria-label="Open a student from the folder"><option value="">Open student…</option></select>
+  <button id="btnNew">+ New student</button>
+  <select id="folderPick" aria-label="Student folder to save into"><option value="">Student folder…</option></select>
+  <button id="btnSave" title="Ctrl+S">💾 Save</button>
+  <button id="btnPrint">🖨 Print goal</button>
+  <button id="btnPrintAll">🖨 Print all goals</button>
+  <button id="btnMore" title="Backup, load file, settings">⋯ More</button>
+  <span class="status" id="status" role="status" aria-live="polite">No folder chosen</span>
+</div>
+
+<div class="goalbar" id="goalbar"></div>
+
+<div id="app">
+  <div class="sheet">
+    <div class="unit" id="unitHeader"></div>
+    <div class="idrow">
+      <label><span>Student Name:</span><input id="fName" autocomplete="off"></label>
+      <label><span>Birth Date:</span><input id="fDob" type="date"></label>
+      <label><span>Progress Toward Goal #</span><input id="fGoalNum" class="goalnum" autocomplete="off"><span>In the IEP dated:</span><input id="fIep" type="date"></label>
+    </div>
+    <table class="form">
+      <tbody id="formBody"></tbody>
+    </table>
+    <button class="addrow" id="btnAddRow">+ Add progress report row</button>
+  </div>
+</div>
+<footer>IEP Progress Monitor v1.1 · Each student is saved in their own folder inside the caseload folder you choose. Nothing is sent online.</footer>
+
+<div id="printArea"></div>
+
+<dialog id="dlgMore">
+  <h2>More</h2>
+  <p class="help">Backups are plain files you can put on a USB drive. To use a backup, load it, then pick the student's folder to save it there. "Load a file" opens a student file from anywhere, even without a folder chosen.</p>
+  <div class="row" style="justify-content:flex-start;flex-wrap:wrap">
+    <button id="btnDownload">⬇ Download this student (backup)</button>
+    <button id="btnLoad">⬆ Load a student file</button>
+    <button id="btnSettings">⚙ Form settings</button>
+  </div>
+  <input type="file" id="loadInput" accept=".json,application/json" hidden>
+  <div class="row"><button id="closeMore">Close</button></div>
+</dialog>
+
+<dialog id="dlgSettings">
+  <h2>Form settings</h2>
+  <p class="help">One option per line. These lists fill the three Progress Code menus. Paste the exact wording from your TIENET menus here. The first line should stay "(none)".</p>
+  <label><b>Header (top of form)</b><textarea id="sHeader" style="min-height:80px"></textarea></label>
+  <label><b>Progress Code – menu 1</b><textarea id="sC1"></textarea></label>
+  <label><b>Progress Code – menu 2</b><textarea id="sC2"></textarea></label>
+  <label><b>Progress Code – menu 3</b><textarea id="sC3"></textarea></label>
+  <div class="row"><button id="sReset">Restore defaults</button><button id="sCancel">Cancel</button><button id="sSave" class="primary">Save settings</button></div>
+</dialog>
+
+<script>
+"use strict";
+const VERSION = "1.1";
+const DEFAULT_SETTINGS = {
+  header: "Bismarck Special Education Unit\n128 Soo Line Dr\nBismarck, ND 58501\n701-323-4028",
+  c1: ["(none)","Progress made","Sufficient progress made","Goal met","No progress made due to","Insufficient progress due to","Goal not addressed this period due to"],
+  c2: ["(none)","more time needed.","absences.","change in schedule/setting.","skill not yet introduced.","behavior impacting learning.","see measurable data."],
+  c3: ["(none)","Anticipate meeting goal by IEP end.","Do not anticipate meeting goal by IEP end."]
+};
+const ROWS_DEFAULT = 4;
+
+// ---------- settings (stored in this browser) ----------
+let settings;
+function loadSettings(){
+  try{ settings = Object.assign({}, DEFAULT_SETTINGS, JSON.parse(localStorage.getItem("ipm.settings")||"{}")); }
+  catch(e){ settings = {...DEFAULT_SETTINGS}; }
+}
+function saveSettingsLS(){ try{ localStorage.setItem("ipm.settings", JSON.stringify(settings)); }catch(e){} }
+
+// ---------- data model ----------
+const blankRow = () => ({date:"", c1:"", c2:"", c3:"", html:"", images:[]});
+const blankGoal = n => ({num:String(n), iepDate:"", text:"", rows:Array.from({length:ROWS_DEFAULT}, blankRow)});
+function blankStudent(){ return {app:"IEP Progress Monitor", version:VERSION, fileName:"", folder:"", name:"", dob:"", goals:[blankGoal(1)], updated:""}; }
+
+let doc = blankStudent();
+let gi = 0;          // current goal index
+let dirty = false;
+let dirHandle = null;
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const esc = s => String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtDate = iso => { if(!iso) return ""; const [y,m,d]=iso.split("-"); return `${m}/${d}/${y}`; };
+const safeName = s => (s||"").replace(/[\\/:*?"<>|]+/g,"").trim().slice(0,60);
+function setStatus(t){ $("status").textContent = t; }
+function markDirty(){ dirty = true; setStatus(dirHandle ? "Unsaved changes…" : "Unsaved — choose a folder or download a backup"); scheduleSave(); }
+let saveTimer=null;
+function scheduleSave(){ if(!dirHandle) return; clearTimeout(saveTimer); saveTimer=setTimeout(()=>saveToFolder(true),1500); }
+
+// ---------- IndexedDB (remember the folder) ----------
+function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open("ipm",1); r.onupgradeneeded=()=>r.result.createObjectStore("kv"); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function kvSet(k,v){ try{ const db=await idb(); db.transaction("kv","readwrite").objectStore("kv").put(v,k); }catch(e){} }
+async function kvGet(k){ try{ const db=await idb(); return await new Promise(res=>{ const q=db.transaction("kv").objectStore("kv").get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>res(null); }); }catch(e){ return null; } }
+
+// ---------- folder ----------
+const fsSupported = "showDirectoryPicker" in window;
+async function chooseFolder(){
+  if(!fsSupported){ alert("Saving to a folder needs Chrome or Edge.\nYou can still use ⋯ More → Download / Load a student file."); return; }
+  try{
+    dirHandle = await window.showDirectoryPicker({mode:"readwrite", id:"ipm-folder"});
+    await kvSet("dir", dirHandle);
+    await refreshStudentList();
+    setStatus(`Folder: ${dirHandle.name}`);
+    $("btnFolder").textContent = `📁 ${dirHandle.name}`;
+    if(dirty) saveToFolder(true);
+  }catch(e){ if(e.name!=="AbortError") alert("Couldn't open that folder: "+e.message); }
+}
+async function reconnectFolder(){
+  const h = await kvGet("dir");
+  if(!h) return;
+  let p = await h.queryPermission({mode:"readwrite"});
+  if(p==="granted"){ dirHandle=h; $("btnFolder").textContent=`📁 ${h.name}`; setStatus(`Folder: ${h.name}`); refreshStudentList(); }
+  else { $("btnFolder").textContent=`📁 Reconnect “${h.name}”`; $("btnFolder").onclick=async()=>{
+      try{ if((await h.requestPermission({mode:"readwrite"}))==="granted"){ dirHandle=h; $("btnFolder").textContent=`📁 ${h.name}`; $("btnFolder").onclick=chooseFolder; setStatus(`Folder: ${h.name}`); refreshStudentList(); } }
+      catch(e){ chooseFolder(); }
+    }; setStatus("Click Reconnect to use your folder"); }
+}
+let folders=[];
+const isPMFile = n => n.toLowerCase().endsWith(".json") && !n.startsWith("_");
+async function refreshStudentList(){
+  const sel=$("studentPick"), fp=$("folderPick");
+  sel.length=1; fp.length=1; folders=[];
+  if(!dirHandle) return;
+  const files=[];
+  for await (const [n,h] of dirHandle.entries()){
+    if(h.kind==="directory"){
+      if(n.startsWith(".")) continue;
+      folders.push(n);
+      for await (const [fn,fh] of h.entries()){ if(fh.kind==="file" && isPMFile(fn) && /progress monitor/i.test(fn)) files.push({folder:n,name:fn}); }
+    } else if(isPMFile(n)) files.push({folder:"",name:n});   // v1.0 files saved loose in the main folder
+  }
+  folders.sort((a,b)=>a.localeCompare(b));
+  files.sort((a,b)=>(a.folder||"~").localeCompare(b.folder||"~")||a.name.localeCompare(b.name));
+  for(const f of files){ const o=document.createElement("option"); o.value=f.folder+"/"+f.name;
+    o.textContent=(f.folder?f.folder+" — ":"(main folder) — ")+f.name.replace(/ ?progress monitor/i,"").replace(/\.json$/i,""); sel.appendChild(o); }
+  for(const f of folders){ const o=document.createElement("option"); o.value=f; o.textContent="📂 "+f; fp.appendChild(o); }
+  const nw=document.createElement("option"); nw.value="__new"; nw.textContent="+ New student folder…"; fp.appendChild(nw);
+  syncPickers();
+}
+function syncPickers(){
+  const fp=$("folderPick");
+  fp.value = doc.folder && folders.includes(doc.folder) ? doc.folder : "";
+  fp.classList.toggle("need", !!dirHandle && !doc.folder);
+  if(doc.fileName) $("studentPick").value = (doc.folder||"")+"/"+doc.fileName; else $("studentPick").value="";
+}
+async function folderHandle(){ return doc.folder ? dirHandle.getDirectoryHandle(doc.folder) : dirHandle; }
+async function pickFolder(v){
+  if(v==="__new"){
+    const name = safeName(prompt("Name for the new student folder:", safeName(doc.name)) || "");
+    if(!name){ syncPickers(); return; }
+    try{ await dirHandle.getDirectoryHandle(name,{create:true}); }catch(e){ alert("Couldn't make that folder: "+e.message); syncPickers(); return; }
+    await refreshStudentList(); v=name;
+  }
+  if(!v){ syncPickers(); return; }
+  if(doc.fileName && v!==doc.folder){
+    if(!confirm(`Save this student into “${v}” from now on?\nThe copy already in “${doc.folder||"the main folder"}” stays there; delete it yourself if you don't need it.`)){ syncPickers(); return; }
+    doc.fileName="";
+  }
+  doc.folder=v; syncPickers(); markDirty();
+}
+async function saveToFolder(quiet){
+  if(!dirHandle){ if(!quiet) chooseFolder(); return; }
+  if(!doc.folder){ setStatus("Pick the student's folder (gold box) to save"); if(!quiet) $("folderPick").focus(); return; }
+  const base = safeName(doc.name);
+  if(!doc.fileName){
+    if(!base){ setStatus("Type a student name (initials are fine) to save"); if(!quiet) $("fName").focus(); return; }
+    let fn = `${base} Progress Monitor.json`, i=2;
+    while(await exists(fn)) fn = `${base} Progress Monitor (${i++}).json`;
+    doc.fileName = fn;
+  }
+  try{
+    doc.updated = new Date().toISOString(); doc.version = VERSION;
+    const dir = await folderHandle();
+    const fh = await dir.getFileHandle(doc.fileName,{create:true});
+    const w = await fh.createWritable(); await w.write(JSON.stringify(doc,null,1)); await w.close();
+    dirty=false; setStatus(`Saved to ${doc.folder} · ${new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}`);
+    if(![...$("studentPick").options].some(o=>o.value===doc.folder+"/"+doc.fileName)) await refreshStudentList(); else syncPickers();
+  }catch(e){ setStatus("Save failed — "+e.message); }
+}
+async function exists(fn){ try{ await (await folderHandle()).getFileHandle(fn); return true; }catch(e){ return false; } }
+async function openFromFolder(v){
+  if(!v) return;
+  if(dirty && !confirm("You have unsaved changes. Open another student anyway?")){ syncPickers(); return; }
+  const cut=v.indexOf("/"), folder=v.slice(0,cut), fn=v.slice(cut+1);
+  try{
+    const dir = folder ? await dirHandle.getDirectoryHandle(folder) : dirHandle;
+    const f = await (await dir.getFileHandle(fn)).getFile();
+    loadDoc(JSON.parse(await f.text()), fn, folder);
+    if(!folder) setStatus("Opened an older file — pick this student's folder (gold box) to save it there");
+  }catch(e){ alert("Couldn't open that file: "+e.message); }
+}
+
+// ---------- load / normalize ----------
+function loadDoc(d, fn, folder){
+  const s = blankStudent();
+  s.name=d.name||""; s.dob=d.dob||""; s.fileName = fn || ""; s.folder = folder || "";
+  s.goals = (Array.isArray(d.goals)&&d.goals.length?d.goals:[blankGoal(1)]).map((g,i)=>({
+    num:g.num??String(i+1), iepDate:g.iepDate||"", text:g.text||"",
+    rows:(Array.isArray(g.rows)&&g.rows.length?g.rows:[blankRow()]).map(r=>({date:r.date||"",c1:r.c1||"",c2:r.c2||"",c3:r.c3||"",html:r.html||"",images:Array.isArray(r.images)?r.images:[]}))
+  }));
+  doc=s; gi=0; dirty=false; render();
+  setStatus(`Opened ${s.fileName||"file"}`);
+  if(dirHandle) syncPickers();
+}
+
+// ---------- render (only on explicit actions, never on typing) ----------
+function render(){
+  $("unitHeader").textContent = settings.header;
+  $("fName").value = doc.name; $("fDob").value = doc.dob;
+  const g = doc.goals[gi];
+  $("fGoalNum").value = g.num; $("fIep").value = g.iepDate;
+  renderGoalBar(); renderBody();
+}
+function renderGoalBar(){
+  const bar=$("goalbar"); bar.innerHTML="";
+  const lab=document.createElement("b"); lab.textContent="Goals:"; bar.appendChild(lab);
+  doc.goals.forEach((g,i)=>{
+    const b=document.createElement("button"); b.textContent=`Goal ${g.num||i+1}`; b.className=i===gi?"on":"";
+    b.setAttribute("aria-pressed", i===gi); b.onclick=()=>{ gi=i; render(); }; bar.appendChild(b);
+  });
+  const add=document.createElement("button"); add.textContent="+ Add goal";
+  add.onclick=()=>{ const prev=doc.goals[doc.goals.length-1]; const ng=blankGoal(doc.goals.length+1); ng.iepDate=prev?prev.iepDate:""; doc.goals.push(ng); gi=doc.goals.length-1; markDirty(); render(); };
+  bar.appendChild(add);
+  const sp=document.createElement("span"); sp.className="spacer"; bar.appendChild(sp);
+  if(doc.goals.length>1){
+    const del=document.createElement("button"); del.className="danger"; del.textContent="Delete this goal";
+    del.onclick=()=>{ if(confirm(`Delete Goal ${doc.goals[gi].num} and all its progress rows? This can't be undone after it saves.`)){ doc.goals.splice(gi,1); gi=Math.max(0,gi-1); markDirty(); render(); } };
+    bar.appendChild(del);
+  }
+}
+function optionList(list, val){
+  const opts = list.slice(); if(val && !opts.includes(val)) opts.push(val);
+  return opts.map(o=>`<option value="${esc(o==="(none)"?"":o)}"${(o===val||(o==="(none)"&&!val))?" selected":""}>${esc(o)}</option>`).join("");
+}
+function renderBody(){
+  const g = doc.goals[gi], tb=$("formBody");
+  tb.innerHTML = `<tr><td colspan="2" class="goalcell"><b>Goal:</b><textarea class="goaltext" id="fGoalText" aria-label="Goal text"></textarea></td></tr>`;
+  $("fGoalText").value = g.text;
+  $("fGoalText").addEventListener("input", e=>{ g.text=e.target.value; markDirty(); });
+  g.rows.forEach((r,ri)=>tb.appendChild(rowEl(g,r,ri)));
+}
+function rowEl(g, r, ri){
+  const tr=document.createElement("tr");
+  tr.innerHTML = `
+    <td class="left"><label>Progress Report Date: <input type="date" class="rdate" aria-label="Progress report date, row ${ri+1}"></label></td>
+    <td>
+      <div class="codes"><span>Progress Code:</span>
+        <select class="c1" aria-label="Progress code part 1">${optionList(settings.c1,r.c1)}</select>
+        <select class="c2" aria-label="Progress code part 2">${optionList(settings.c2,r.c2)}</select>
+        <select class="c3" aria-label="Progress code part 3">${optionList(settings.c3,r.c3)}</select>
+      </div>
+      <div class="md-label">Measurable Data:</div>
+      <div class="tools" role="toolbar" aria-label="Text formatting">
+        <button type="button" data-cmd="bold" title="Bold"><b>B</b></button>
+        <button type="button" data-cmd="italic" title="Italic"><i>I</i></button>
+        <button type="button" data-cmd="underline" title="Underline"><u>U</u></button>
+        <button type="button" data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+        <button type="button" data-cmd="removeFormat" title="Clear formatting">⌫</button>
+      </div>
+      <div class="editor" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Measurable data, row ${ri+1}" data-ph="Type measurable data…"></div>
+      <div class="attach">
+        <label style="display:inline-flex;gap:6px;align-items:center">Attach image: <input type="file" accept="image/*" class="imgfile" multiple></label>
+        <a class="pasteimg" role="button" tabindex="0">paste image</a>
+      </div>
+      <div class="thumbs"></div>
+      <div class="rowtools"><button type="button" class="delrow">Remove this row</button></div>
+    </td>`;
+  const q = s => tr.querySelector(s);
+  q(".rdate").value = r.date;
+  q(".rdate").addEventListener("change", e=>{ r.date=e.target.value; markDirty(); });
+  ["c1","c2","c3"].forEach(k=> q("."+k).addEventListener("change", e=>{ r[k]=e.target.value; markDirty(); }));
+  const ed=q(".editor"); ed.innerHTML = r.html;
+  ed.addEventListener("input", ()=>{ r.html = ed.innerHTML==="<br>"?"":ed.innerHTML; markDirty(); });
+  ed.addEventListener("paste", e=>{
+    const items=[...(e.clipboardData?.items||[])].filter(i=>i.type.startsWith("image/"));
+    if(items.length){ e.preventDefault(); items.forEach(i=>addImage(r, i.getAsFile(), q(".thumbs"))); return; }
+    // paste text as plain text so outside formatting doesn't come along
+    const t=e.clipboardData?.getData("text/plain"); if(t!=null){ e.preventDefault(); document.execCommand("insertText",false,t); }
+  });
+  tr.querySelectorAll(".tools button").forEach(b=>{
+    b.addEventListener("mousedown", e=>e.preventDefault());
+    b.addEventListener("click", ()=>{ ed.focus(); document.execCommand(b.dataset.cmd,false,null); r.html=ed.innerHTML; markDirty(); });
+  });
+  q(".imgfile").addEventListener("change", e=>{ [...e.target.files].forEach(f=>addImage(r,f,q(".thumbs"))); e.target.value=""; });
+  const pasteLink=q(".pasteimg");
+  const doPaste=async()=>{
+    try{
+      const items = await navigator.clipboard.read(); let found=false;
+      for(const it of items){ const t=it.types.find(x=>x.startsWith("image/")); if(t){ found=true; addImage(r, await it.getType(t), q(".thumbs")); } }
+      if(!found) alert("No image on the clipboard. Copy a screenshot first (Win+Shift+S), then click paste image.");
+    }catch(e){ alert("Your browser blocked clipboard access. Click in the Measurable Data box and press Ctrl+V instead."); }
+  };
+  pasteLink.addEventListener("click", doPaste);
+  pasteLink.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); doPaste(); } });
+  drawThumbs(r, q(".thumbs"));
+  q(".delrow").addEventListener("click", ()=>{
+    const filled = r.date||r.c1||r.c2||r.c3||r.html||r.images.length;
+    if(filled && !confirm("Remove this progress row and what's in it?")) return;
+    g.rows.splice(g.rows.indexOf(r),1); if(!g.rows.length) g.rows.push(blankRow()); markDirty(); renderBody();
+  });
+  return tr;
+}
+function addImage(r, file, box){
+  if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>{
+    // shrink large images so student files stay small
+    const img=new Image(); img.onload=()=>{
+      const max=1400, sc=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement("canvas"); c.width=Math.round(img.width*sc); c.height=Math.round(img.height*sc);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      r.images.push(c.toDataURL("image/jpeg",0.85)); drawThumbs(r,box); markDirty();
+    }; img.src=fr.result;
+  };
+  fr.readAsDataURL(file);
+}
+function drawThumbs(r, box){
+  box.innerHTML="";
+  r.images.forEach((src,i)=>{
+    const d=document.createElement("div"); d.className="thumb";
+    d.innerHTML=`<img alt="Attached image ${i+1}"><button type="button" title="Remove image" aria-label="Remove image ${i+1}">×</button>`;
+    d.querySelector("img").src=src;
+    d.querySelector("button").onclick=()=>{ r.images.splice(i,1); drawThumbs(r,box); markDirty(); };
+    box.appendChild(d);
+  });
+}
+
+// ---------- top fields ----------
+$("fName").addEventListener("input", e=>{ doc.name=e.target.value; markDirty(); });
+$("fDob").addEventListener("change", e=>{ doc.dob=e.target.value; markDirty(); });
+$("fGoalNum").addEventListener("input", e=>{ doc.goals[gi].num=e.target.value; markDirty(); });
+$("fGoalNum").addEventListener("change", ()=>renderGoalBar()); // tab labels update when you leave the box
+$("fIep").addEventListener("change", e=>{ doc.goals[gi].iepDate=e.target.value; markDirty(); });
+
+// ---------- buttons ----------
+$("btnFolder").onclick = chooseFolder;
+$("studentPick").onchange = e => openFromFolder(e.target.value);
+$("folderPick").onchange = e => pickFolder(e.target.value);
+$("btnNew").onclick = ()=>{ if(dirty && !confirm("You have unsaved changes. Start a new student anyway?")) return; doc=blankStudent(); gi=0; dirty=false; render(); if(dirHandle) syncPickers(); setStatus(dirHandle?"New student — type a name, then pick their folder":"New student"); $("fName").focus(); };
+$("btnSave").onclick = ()=> dirHandle ? saveToFolder(false) : (fsSupported ? chooseFolder() : downloadDoc());
+$("btnAddRow").onclick = ()=>{ doc.goals[gi].rows.push(blankRow()); markDirty(); renderBody(); };
+$("btnPrint").onclick = ()=>printGoals([gi]);
+$("btnPrintAll").onclick = ()=>printGoals(doc.goals.map((_,i)=>i));
+$("btnMore").onclick = ()=>$("dlgMore").showModal();
+$("closeMore").onclick = ()=>$("dlgMore").close();
+$("btnDownload").onclick = downloadDoc;
+$("btnLoad").onclick = ()=>$("loadInput").click();
+$("loadInput").onchange = async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  if(dirty && !confirm("You have unsaved changes. Load this file anyway?")) return;
+  try{ const d=JSON.parse(await f.text()); loadDoc(d, "", ""); if(dirHandle){ syncPickers(); } $("dlgMore").close(); if(dirHandle){ markDirty(); } }
+  catch(err){ alert("That file isn't a progress monitor file."); }
+};
+function downloadDoc(){
+  const base = safeName(doc.name)||"student";
+  const blob=new Blob([JSON.stringify({...doc, version:VERSION, updated:new Date().toISOString()},null,1)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=base+".json"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  if(!dirHandle){ dirty=false; setStatus(`Downloaded ${base}.json`); }
+}
+document.addEventListener("keydown", e=>{ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){ e.preventDefault(); $("btnSave").click(); } });
+window.addEventListener("beforeunload", e=>{ if(dirty){ e.preventDefault(); e.returnValue=""; } });
+
+// ---------- settings dialog ----------
+$("btnSettings").onclick = ()=>{
+  $("sHeader").value=settings.header; $("sC1").value=settings.c1.join("\n"); $("sC2").value=settings.c2.join("\n"); $("sC3").value=settings.c3.join("\n");
+  $("dlgMore").close(); $("dlgSettings").showModal();
+};
+const lines = t => { const a=t.split("\n").map(s=>s.trim()).filter(Boolean); if(a[0]!=="(none)") a.unshift("(none)"); return a; };
+$("sSave").onclick = ()=>{ settings={header:$("sHeader").value.trim(), c1:lines($("sC1").value), c2:lines($("sC2").value), c3:lines($("sC3").value)}; saveSettingsLS(); $("dlgSettings").close(); render(); };
+$("sCancel").onclick = ()=>$("dlgSettings").close();
+$("sReset").onclick = ()=>{ $("sHeader").value=DEFAULT_SETTINGS.header; $("sC1").value=DEFAULT_SETTINGS.c1.join("\n"); $("sC2").value=DEFAULT_SETTINGS.c2.join("\n"); $("sC3").value=DEFAULT_SETTINGS.c3.join("\n"); };
+
+// ---------- print ----------
+function printGoals(idxs){
+  const pa=$("printArea");
+  pa.innerHTML = idxs.map(i=>{
+    const g=doc.goals[i];
+    const used = g.rows.filter(r=>r.date||r.c1||r.c2||r.c3||r.html||r.images.length);
+    const rows = (used.length?used:g.rows).map(r=>{
+      const code=[r.c1,r.c2,r.c3].filter(Boolean).join(" ");
+      return `<tr><td class="l">Progress Report Date: ${esc(fmtDate(r.date))}</td>
+        <td><b>Progress Code:</b> ${esc(code)}<br><b>Measurable Data:</b><div class="md">${r.html||""}</div>${r.images.map(s=>`<img src="${s}" alt="">`).join("")}</td></tr>`;
+    }).join("");
+    return `<section class="psheet">
+      <div class="unit">${esc(settings.header)}</div>
+      <div class="pid"><span><b>Student Name:</b> ${esc(doc.name)}</span><span><b>Birth Date:</b> ${esc(fmtDate(doc.dob))}</span>
+      <span><b>Progress Toward Goal # ${esc(g.num)} In the IEP dated:</b> ${esc(fmtDate(g.iepDate))}</span></div>
+      <table><tr><td colspan="2"><b>Goal:</b><div style="white-space:pre-wrap">${esc(g.text)}</div></td></tr>${rows}</table>
+    </section>`;
+  }).join("");
+  setTimeout(()=>window.print(),50);
+}
+
+// ---------- start ----------
+loadSettings(); render();
+if(fsSupported) reconnectFolder(); else setStatus("Folder saving needs Chrome/Edge — use ⋯ More to download/load files");
+</script>
+</body>
+</html>
